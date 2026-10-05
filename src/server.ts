@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { join } from 'node:path';
 import { AppError, Errors } from './errors';
 import { Service } from './service';
 
@@ -8,10 +10,32 @@ export function createServer(service: Service) {
   });
 }
 
+/**
+ * The optional demo UI: a single static HTML file. Read lazily on first
+ * request so tests that never hit "/" do not depend on the file existing.
+ */
+let indexHtml: string | undefined;
+function demoPage(): string {
+  indexHtml ??= readFileSync(join(import.meta.dir, '..', 'public', 'index.html'), 'utf8');
+  return indexHtml;
+}
+
 async function handle(service: Service, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const seg = url.pathname.split('/').filter(Boolean);
   const method = req.method ?? 'GET';
+
+  if (method === 'GET' && (seg.length === 0 || (seg.length === 1 && seg[0] === 'index.html'))) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(demoPage());
+    return;
+  }
+
+  if (method === 'GET' && seg.length === 1 && seg[0] === 'favicon.ico') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
 
   if (method === 'GET' && seg.length === 1 && seg[0] === 'health') {
     return sendJson(res, 200, { status: 'ok', config: service.store.config });

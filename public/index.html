@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Checkout &amp; Rewards - Use-case explorer</title>
+<style>
+  :root {
+    --bg:#f4f6f9; --card:#ffffff; --line:#e3e7ee; --ink:#1b2430; --muted:#66728a;
+    --accent:#2f6fed; --accent-soft:#e8f0ff; --ok:#1f9d61; --ok-soft:#e6f6ee;
+    --bad:#d6453d; --bad-soft:#fdecea; --warn:#c77d12; --warn-soft:#fff5e3; --code:#f0f3f8;
+    --side:#111827; --side-ink:#d1d5db; --side-active:#1f2937;
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { background:var(--code); padding:1px 5px; border-radius:4px; font-size:12px; }
+  button { font:inherit; cursor:pointer; border-radius:7px; border:1px solid var(--line); background:#fff; color:var(--ink); padding:7px 12px; }
+  button:hover { border-color:#b9c3d4; background:#fafbfd; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.primary:hover { background:#275ed0; }
+  button.ghost { border-color:transparent; color:var(--accent); background:transparent; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  input[type=text], input[type=number] { font:inherit; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink); }
+  input[type=number] { width:68px; }
+  .pill { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600; border:1px solid transparent; }
+  .pill.ok { background:var(--ok-soft); color:var(--ok); }
+  .pill.bad { background:var(--bad-soft); color:var(--bad); }
+  .pill.warn { background:var(--warn-soft); color:var(--warn); }
+  .pill.info { background:var(--accent-soft); color:var(--accent); }
+  .pill.neutral { background:var(--code); color:var(--muted); }
+  .muted { color:var(--muted); }
+  .num { text-align:right; font-variant-numeric: tabular-nums; }
+
+  /* -------------------------------------------------- shell */
+  .shell { display:grid; grid-template-columns: 260px 1fr 320px; grid-template-rows: 1fr auto; height:100vh; }
+  @media (max-width:1200px) { .shell { grid-template-columns: 240px 1fr; } aside.state { display:none; } }
+  nav.side { background:var(--side); color:var(--side-ink); display:flex; flex-direction:column; overflow:auto; grid-row:1 / span 2; }
+  nav .brand { padding:18px 18px 12px; border-bottom:1px solid #1f2937; }
+  nav .brand h1 { margin:0; font-size:15px; color:#fff; }
+  nav .brand .cfg { font-size:12px; color:#9ca3af; margin-top:4px; }
+  nav .group { padding:12px 10px 4px 18px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#6b7280; }
+  nav a { display:flex; align-items:center; gap:10px; padding:8px 14px 8px 18px; color:var(--side-ink); text-decoration:none; font-size:13px; border-left:3px solid transparent; }
+  nav a:hover { background:#161e2e; }
+  nav a.active { background:var(--side-active); border-left-color:var(--accent); color:#fff; }
+  nav a .n { width:20px; height:20px; border-radius:50%; background:#1f2937; color:#9ca3af; font-size:11px; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+  nav a .st { margin-left:auto; width:8px; height:8px; border-radius:50%; background:#374151; flex:none; }
+  nav a .st.pass { background:var(--ok); } nav a .st.fail { background:var(--bad); } nav a .st.running { background:var(--warn); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity:.3; } }
+  nav .foot { margin-top:auto; padding:14px 18px; font-size:12px; color:#6b7280; border-top:1px solid #1f2937; }
+  nav .foot button { width:100%; margin-top:8px; background:#1f2937; border-color:#374151; color:#e5e7eb; }
+
+  main { overflow:auto; padding:24px 28px; }
+  aside.state { background:#fff; border-left:1px solid var(--line); overflow:auto; padding:18px; }
+  aside h3 { margin:14px 0 8px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+  aside h3:first-child { margin-top:0; }
+  aside table { width:100%; border-collapse:collapse; font-size:13px; }
+  aside td { padding:4px 2px; border-bottom:1px solid var(--line); }
+  .bar { height:8px; background:var(--code); border-radius:999px; overflow:hidden; margin:6px 0; }
+  .bar > div { height:100%; background:var(--accent); transition: width .3s; }
+  .kv { display:grid; grid-template-columns: 1fr auto; gap:4px 10px; font-size:13px; }
+  .kv dt { color:var(--muted); } .kv dd { margin:0; font-variant-numeric: tabular-nums; text-align:right; }
+
+  /* -------------------------------------------------- scenario page */
+  .page { max-width: 940px; }
+  .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:14px; }
+  .page-head h2 { margin:0 0 4px; font-size:22px; }
+  .page-head .tag { font-size:12px; color:var(--muted); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin-bottom:14px; }
+  .card h4 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .two { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+  @media (max-width:900px) { .two { grid-template-columns:1fr; } }
+  ul.expect { margin:0; padding-left:18px; }
+  ul.expect li { margin:3px 0; }
+  .runbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .runbar .summary { margin-left:auto; }
+  .steps { display:flex; flex-direction:column; gap:8px; }
+  .step { border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .step .head { display:flex; align-items:center; gap:10px; padding:9px 12px; background:#fafbfd; cursor:pointer; }
+  .step .head .ic { width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; background:#9aa4b5; flex:none; }
+  .step.pass .head .ic { background:var(--ok); } .step.fail .head .ic { background:var(--bad); } .step.running .head .ic { background:var(--warn); }
+  .step .head .lbl { font-weight:600; }
+  .step .head .cnt { margin-left:auto; font-size:12px; color:var(--muted); }
+  .step .body { padding:8px 12px 10px; border-top:1px solid var(--line); display:none; }
+  .step.open .body, .step.fail .body { display:block; }
+  .req { font-size:12px; padding:3px 0; display:grid; grid-template-columns: 56px 1fr; gap:8px; align-items:baseline; }
+  .req .m { font-weight:700; color:var(--muted); }
+  .req .st { font-weight:700; }
+  .req .st.s2 { color:var(--ok); } .req .st.s4 { color:var(--bad); } .req .st.s5 { color:var(--bad); }
+  .req .resp { color:var(--muted); word-break:break-all; }
+  .chk { font-size:13px; padding:3px 0 3px 2px; }
+  .chk::before { content:"\2713"; color:var(--ok); font-weight:700; margin-right:8px; }
+  .chk.no::before { content:"\2717"; color:var(--bad); }
+  .note { background:var(--warn-soft); color:#7a4d08; border:1px solid #f3dfb6; padding:8px 12px; border-radius:7px; font-size:13px; margin-bottom:12px; }
+
+  /* -------------------------------------------------- storefront */
+  .store { display:grid; grid-template-columns: 1.1fr 1fr; gap:14px; }
+  @media (max-width:900px) { .store { grid-template-columns:1fr; } }
+  table.grid { width:100%; border-collapse:collapse; }
+  table.grid th { text-align:left; font-size:12px; color:var(--muted); font-weight:500; padding:6px 6px; border-bottom:1px solid var(--line); }
+  table.grid td { padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .stock-low { color:var(--warn); font-weight:600; } .stock-out { color:var(--bad); font-weight:600; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  .total { font-size:18px; font-weight:700; }
+  .receipt td { padding:5px 6px; }
+  .receipt .tt td { border-top:2px solid var(--ink); font-weight:700; font-size:15px; }
+
+  /* -------------------------------------------------- log drawer */
+  .drawer { grid-column: 2 / span 2; border-top:1px solid var(--line); background:#fff; }
+  .drawer .bar-h { display:flex; align-items:center; gap:10px; padding:8px 16px; cursor:pointer; font-size:13px; }
+  .drawer .bar-h .cnt { color:var(--muted); }
+  .drawer pre { margin:0; height:0; overflow:auto; font-size:12px; padding:0 16px; transition:height .2s; background:#0f1115; color:#d1d5db; }
+  .drawer.open pre { height:220px; padding:10px 16px; }
+  .lg-ok { color:#4ade80; } .lg-bad { color:#f87171; } .lg-info { color:#93c5fd; }
+
+  .toast { position:fixed; right:20px; bottom:70px; background:#111827; color:#fff; padding:10px 14px; border-radius:8px; max-width:420px; opacity:0; transition:opacity .2s; pointer-events:none; font-size:13px; border-left:4px solid var(--accent); z-index:9; }
+  .toast.show { opacity:1; } .toast.bad { border-left-color:var(--bad); } .toast.ok { border-left-color:var(--ok); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="side">
+    <div class="brand">
+      <h1>Checkout &amp; Rewards</h1>
+      <div class="cfg" id="cfg">connecting...</div>
+    </div>
+    <div class="group">Play</div>
+    <a href="#store" data-page="store"><span class="n">&#9654;</span> Storefront</a>
+    <div class="group">Use cases</div>
+    <div id="navScenarios"></div>
+    <div class="foot">
+      State is in-memory. Restart the server to reseed inventory.
+      <button id="runAll">Run all use cases</button>
+    </div>
+  </nav>
+
+  <main id="main"></main>
+
+  <aside class="state">
+    <h3>Inventory</h3>
+    <table id="stInv"></table>
+    <h3>Coupon milestone</h3>
+    <div id="stMilestone" class="muted">-</div>
+    <div class="bar"><div id="stBar" style="width:0%"></div></div>
+    <h3>Coupons seen this session</h3>
+    <div id="stCoupons" class="muted">none yet</div>
+    <h3>Report</h3>
+    <dl class="kv" id="stReport"></dl>
+  </aside>
+
+  <div class="drawer" id="drawer">
+    <div class="bar-h" id="drawerToggle">
+      <strong>Request log</strong> <span class="cnt" id="logCount">0 requests</span>
+      <span style="margin-left:auto" class="muted">click to toggle</span>
+      <button class="ghost" id="clearLog" style="padding:2px 8px">clear</button>
+    </div>
+    <pre id="logBody"></pre>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = (id) => document.getElementById(id);
+const money = (c) => (c / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+const short = (s) => String(s ?? '').slice(0, 8);
+const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+let config = { n: 5, x: 10 };
+const coupons = new Map();                // code -> coupon (session view)
+const results = {};                       // scenario id -> 'pass' | 'fail' | 'running'
+let reqCount = 0;
+let currentStep = null;                   // step collector while a scenario runs
+
+// ============================================================ infra
+function log(kind, text) {
+  const el = $('logBody');
+  const line = document.createElement('div');
+  line.className = 'lg-' + kind;
+  line.textContent = `${new Date().toLocaleTimeString()}  ${text}`;
+  el.prepend(line);
+  if (kind !== 'info') { reqCount++; $('logCount').textContent = `${reqCount} requests`; }
+}
+function toast(msg, kind = '') {
+  const t = $('toast'); t.textContent = msg; t.className = `toast show ${kind}`;
+  clearTimeout(toast._t); toast._t = setTimeout(() => (t.className = 'toast'), 3000);
+}
+async function api(method, path, body, headers = {}) {
+  const res = await fetch(path, {
+    method, headers: { 'Content-Type': 'application/json', ...headers },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  const err = json?.error ? `${json.error.code}${json.error.details ? ' ' + JSON.stringify(json.error.details) : ''}` : '';
+  log(res.ok ? 'ok' : 'bad', `${method} ${path} -> ${res.status}${err ? '  ' + err : ''}${headers['Idempotency-Key'] ? '  [Idempotency-Key: ' + headers['Idempotency-Key'] + ']' : ''}`);
+  const r = { ok: res.ok, status: res.status, json };
+  if (currentStep) currentStep.reqs.push({ method, path, body, headers, status: res.status, json });
+  return r;
+}
+const errOf = (r) => r.json?.error?.code ?? `HTTP ${r.status}`;
+async function cartWith(items) {
+  const c = (await api('POST', '/carts')).json;
+  for (const [productId, quantity] of items) await api('POST', `/carts/${c.id}/items`, { productId, quantity });
+  return c.id;
+}
+const products = async () => (await api('GET', '/products')).json.products;
+const report = async () => (await api('GET', '/admin/report')).json;
+const inv = async (id) => (await products()).find((p) => p.id === id).inventory;
+/** Product with the most stock - safe to use for filler orders no matter what earlier runs consumed. */
+const richest = async () => (await products()).reduce((a, b) => (b.inventory > a.inventory ? b : a));
+function rememberCoupon(c) { if (c?.code && !coupons.has(c.code)) coupons.set(c.code, { ...c }); return coupons.get(c.code); }
+function markRedeemed(code, orderId) { const c = coupons.get(code); if (c) { c.status = 'redeemed'; c.orderId = orderId; } }
+
+/** Make sure at least one *available* coupon exists; returns its code. */
+async function ensureCoupon(step) {
+  const have = [...coupons.values()].find((c) => c.status === 'available');
+  if (have) return have.code;
+  let r = await api('POST', '/admin/coupons');
+  if (r.ok && !coupons.has(r.json.code)) { rememberCoupon(r.json); return r.json.code; }
+  if (r.ok && coupons.get(r.json.code)?.status === 'available') return r.json.code;
+  // Need a fresh milestone: place orders up to the next multiple of n.
+  const rep = await report();
+  const need = config.n - (rep.totalOrders % config.n) || config.n;
+  step?.note(`placing ${need} filler order(s) to reach milestone ${rep.totalOrders + need}`);
+  const filler = (await richest()).id;
+  for (let i = 0; i < need; i++) await api('POST', `/carts/${await cartWith([[filler, 1]])}/checkout`, {});
+  // Generate until we get a code we have not seen (oldest unrewarded first).
+  for (let i = 0; i < 25; i++) {
+    r = await api('POST', '/admin/coupons');
+    if (!r.ok) break;
+    if (!coupons.has(r.json.code)) { rememberCoupon(r.json); return r.json.code; }
+  }
+  throw new Error('could not obtain an available coupon');
+}
+
+// ============================================================ system state rail
+async function refreshState() {
+  const [ps, rep] = await Promise.all([products(), report()]);
+  $('stInv').innerHTML = ps.map((p) => {
+    const cls = p.inventory === 0 ? 'stock-out' : p.inventory <= 5 ? 'stock-low' : '';
+    return `<tr><td>${esc(p.name)}<br><code>${p.id}</code></td><td class="num">${money(p.priceCents)}</td><td class="num ${cls}">${p.inventory}</td></tr>`;
+  }).join('');
+  const into = rep.totalOrders % config.n;
+  const next = rep.totalOrders + (config.n - into || config.n);
+  $('stMilestone').innerHTML = `${rep.totalOrders} orders placed. ${into === 0 && rep.totalOrders > 0 ? `<strong>Milestone ${rep.totalOrders} reached.</strong>` : `${config.n - into} more to milestone ${next}.`}`;
+  $('stBar').style.width = `${(into / config.n) * 100}%`;
+  $('stReport').innerHTML = `
+    <dt>Orders</dt><dd>${rep.totalOrders}</dd>
+    <dt>Gross</dt><dd>${money(rep.grossRevenueCents)}</dd>
+    <dt>Discounts</dt><dd>-${money(rep.totalDiscountCents)}</dd>
+    <dt><strong>Net</strong></dt><dd><strong>${money(rep.netRevenueCents)}</strong></dd>
+    <dt>Coupons generated</dt><dd>${rep.couponsGenerated}</dd>
+    <dt>available</dt><dd>${rep.couponsAvailable}</dd>
+    <dt>redeemed</dt><dd>${rep.couponsRedeemed}</dd>`;
+  if (rep.couponsAvailable === 0) for (const c of coupons.values()) if (c.status === 'available') c.status = 'redeemed';
+  $('stCoupons').innerHTML = coupons.size === 0 ? '<span class="muted">none yet</span>' :
+    [...coupons.values()].map((c) => `<div style="display:flex;gap:8px;align-items:center;padding:3px 0"><code>${c.code}</code><span class="pill ${c.status === 'available' ? 'ok' : 'neutral'}">${c.status}</span><span class="muted" style="margin-left:auto;font-size:12px">m${c.milestone}</span></div>`).join('');
+}
+
+// ============================================================ scenario engine
+function makeRunner(container) {
+  const stepsEl = container.querySelector('.steps');
+  const summaryEl = container.querySelector('.summary');
+  let pass = 0, fail = 0;
+  return {
+    async step(label, fn) {
+      const el = document.createElement('div');
+      el.className = 'step running';
+      el.innerHTML = `<div class="head"><span class="ic">&middot;</span><span class="lbl">${esc(label)}</span><span class="cnt"></span></div><div class="body"></div>`;
+      el.querySelector('.head').addEventListener('click', () => el.classList.toggle('open'));
+      stepsEl.appendChild(el);
+      const st = { reqs: [], checks: [], notes: [] };
+      currentStep = st;
+      const ctx = {
+        check(cond, text) { st.checks.push({ ok: !!cond, text }); return !!cond; },
+        note(text) { st.notes.push(text); },
+      };
+      let threw = null;
+      try { await fn(ctx); } catch (e) { threw = e; console.error(e); }
+      currentStep = null;
+      const ok = !threw && st.checks.every((c) => c.ok);
+      el.className = `step ${ok ? 'pass' : 'fail'}`;
+      el.querySelector('.ic').textContent = ok ? '\u2713' : '\u2717';
+      el.querySelector('.cnt').textContent = `${st.reqs.length} req \u00b7 ${st.checks.filter((c) => c.ok).length}/${st.checks.length} checks`;
+      const reqLine = (r) => `<div class="req"><span class="m">${r.method}</span><span><span class="mono">${esc(r.path)}</span>${r.body && Object.keys(r.body).length ? ` <span class="mono muted">${esc(JSON.stringify(r.body))}</span>` : ''}${r.headers?.['Idempotency-Key'] ? ` <span class="pill info" style="font-weight:500">key ${esc(r.headers['Idempotency-Key'])}</span>` : ''} &rarr; <span class="st s${String(r.status)[0]}">${r.status}</span> <span class="resp mono">${esc(JSON.stringify(r.json)).slice(0, 220)}${JSON.stringify(r.json).length > 220 ? '…' : ''}</span></span></div>`;
+      // For big fan-out steps, fold the cart-setup noise and group identical outcomes
+      // so the eye lands on the checkout results.
+      let reqHtml;
+      if (st.reqs.length <= 12) reqHtml = st.reqs.map(reqLine).join('');
+      else {
+        const isSetup = (r) => (r.method === 'POST' && (r.path === '/carts' || r.path.endsWith('/items'))) || r.method === 'GET';
+        const setup = st.reqs.filter(isSetup), rest = st.reqs.filter((r) => !isSetup(r));
+        const groups = new Map();
+        for (const r of rest) { const k = `${r.method} ${r.path.replace(/[0-9a-f-]{36}/g, ':id')} -> ${r.status} ${r.json?.error?.code ?? ''}`; (groups.get(k) ?? groups.set(k, []).get(k)).push(r); }
+        reqHtml = `<div class="muted" style="font-size:12px;padding:2px 0">${setup.length} setup/read request(s) folded (POST /carts, POST /carts/:id/items, GETs)</div>` +
+          [...groups.values()].map((g) => `<div class="req"><span class="m">${g.length}&times;</span><span><span class="mono">${g[0].method} ${esc(g[0].path.replace(/[0-9a-f-]{36}/g, ':id'))}</span> &rarr; <span class="st s${String(g[0].status)[0]}">${g[0].status}</span> ${g[0].json?.error ? `<span class="pill bad" style="font-weight:500">${esc(g[0].json.error.code)}</span>` : '<span class="pill ok" style="font-weight:500">order created</span>'} <span class="resp mono">e.g. ${esc(JSON.stringify(g[0].json)).slice(0, 160)}…</span></span></div>`).join('');
+      }
+      el.querySelector('.body').innerHTML =
+        st.notes.map((n) => `<div class="muted" style="font-size:12px;padding:2px 0">${esc(n)}</div>`).join('') + reqHtml +
+        st.checks.map((c) => `<div class="chk ${c.ok ? '' : 'no'}">${esc(c.text)}</div>`).join('') +
+        (threw ? `<div class="chk no">threw: ${esc(threw.message)}</div>` : '');
+      ok ? pass++ : fail++;
+      summaryEl.innerHTML = `<span class="pill ${fail ? 'bad' : 'ok'}">${pass} passed${fail ? `, ${fail} failed` : ''}</span>`;
+      return ok;
+    },
+    get failed() { return fail; },
+  };
+}
+
+// ============================================================ scenarios
+const SCENARIOS = [
+  {
+    id: 'validation', title: 'Cart validation', tag: 'Products & carts',
+    why: 'Invalid products or quantities must not silently enter a cart, and the API must say precisely what was wrong.',
+    expected: ['Unknown product: 404 PRODUCT_NOT_FOUND', 'Zero / negative / fractional quantity: 400 INVALID_QUANTITY', 'Wrong JSON type: 400 INVALID_REQUEST', 'Valid add/update/remove returns the priced cart view', 'Checking out an empty cart: 400 CART_EMPTY'],
+    async run(s) {
+      let cartId;
+      await s.step('Create a cart', async (c) => { const r = await api('POST', '/carts'); cartId = r.json.id; c.check(r.status === 201 && r.json.items.length === 0, '201 with an empty cart'); });
+      await s.step('Reject an unknown product', async (c) => { const r = await api('POST', `/carts/${cartId}/items`, { productId: 'does-not-exist', quantity: 1 }); c.check(r.status === 404 && errOf(r) === 'PRODUCT_NOT_FOUND', '404 PRODUCT_NOT_FOUND'); });
+      await s.step('Reject bad quantities (0, -1, 1.5)', async (c) => {
+        for (const q of [0, -1, 1.5]) { const r = await api('POST', `/carts/${cartId}/items`, { productId: 'p-100', quantity: q }); c.check(r.status === 400 && errOf(r) === 'INVALID_QUANTITY', `quantity ${q} -> 400 INVALID_QUANTITY`); }
+      });
+      await s.step('Reject a quantity sent as a string', async (c) => { const r = await api('POST', `/carts/${cartId}/items`, { productId: 'p-100', quantity: '2' }); c.check(r.status === 400 && errOf(r) === 'INVALID_REQUEST', '"2" -> 400 INVALID_REQUEST'); });
+      await s.step('Nothing invalid leaked into the cart', async (c) => { const r = await api('GET', `/carts/${cartId}`); c.check(r.json.items.length === 0, 'cart is still empty'); });
+      await s.step('Add, accumulate, update, and remove with correct totals', async (c) => {
+        let r = await api('POST', `/carts/${cartId}/items`, { productId: 'p-100', quantity: 2 }); c.check(r.json.subtotalCents === 5000, 'add 2 x 2500 -> subtotal 5000');
+        r = await api('POST', `/carts/${cartId}/items`, { productId: 'p-100', quantity: 1 }); c.check(r.json.items[0].quantity === 3 && r.json.subtotalCents === 7500, 'adding the same product accumulates -> qty 3, subtotal 7500');
+        r = await api('PATCH', `/carts/${cartId}/items/p-100`, { quantity: 1 }); c.check(r.json.subtotalCents === 2500, 'PATCH replaces quantity -> subtotal 2500');
+        r = await api('DELETE', `/carts/${cartId}/items/p-100`); c.check(r.json.items.length === 0 && r.json.subtotalCents === 0, 'DELETE removes the line -> subtotal 0');
+        r = await api('DELETE', `/carts/${cartId}/items/p-100`); c.check(r.status === 404 && errOf(r) === 'ITEM_NOT_IN_CART', 'removing again -> 404 ITEM_NOT_IN_CART');
+      });
+      await s.step('Refuse to check out an empty cart', async (c) => { const r = await api('POST', `/carts/${cartId}/checkout`, {}); c.check(r.status === 400 && errOf(r) === 'CART_EMPTY', '400 CART_EMPTY'); });
+    },
+  },
+  {
+    id: 'snapshot', title: 'Checkout creates an immutable order', tag: 'Checkout & orders',
+    why: 'An order must explain what was bought and how the total was computed, even if product data changes later. Inventory must drop by exactly what was sold, and the cart must lock.',
+    expected: ['201 with lines carrying name, unit price, line total', 'subtotal = sum of lines; total = subtotal - discount; discountPercent recorded', 'Inventory decremented by exactly the ordered quantities', 'GET /orders/:id returns the identical snapshot', 'Mutating or re-checking-out the cart: 409 CART_ALREADY_CHECKED_OUT with the existing orderId'],
+    async run(s) {
+      let cartId, order, a, b;
+      await s.step('Build a cart with two products (2 x A + 1 x B)', async (c) => {
+        [a, b] = (await products()).sort((x, y) => y.inventory - x.inventory);
+        cartId = await cartWith([[a.id, 2], [b.id, 1]]);
+        c.check(!!cartId, `A = ${a.name} (${a.id}, stock ${a.inventory}), B = ${b.name} (${b.id}, stock ${b.inventory})`);
+      });
+      await s.step('Checkout', async (c) => {
+        const r = await api('POST', `/carts/${cartId}/checkout`, {}); order = r.json;
+        c.check(r.status === 201, '201 Created');
+        c.check(order.lines.length === 2 && order.lines.every((l) => l.name && l.unitPriceCents > 0 && l.lineTotalCents === l.unitPriceCents * l.quantity), 'each line snapshots name, unit price, and line total');
+        const sum = order.lines.reduce((a, l) => a + l.lineTotalCents, 0);
+        c.check(order.subtotalCents === sum, `subtotal ${order.subtotalCents} = sum of lines`);
+        c.check(order.discountPercent === 0 && order.discountCents === 0 && order.totalCents === order.subtotalCents, 'no coupon -> 0% discount, total = subtotal');
+      });
+      await s.step('Inventory dropped by exactly 2 and 1', async (c) => { c.check(await inv(a.id) === a.inventory - 2, `${a.id}: ${a.inventory} -> ${a.inventory - 2}`); c.check(await inv(b.id) === b.inventory - 1, `${b.id}: ${b.inventory} -> ${b.inventory - 1}`); });
+      await s.step('Order is retrievable and identical', async (c) => { const r = await api('GET', `/orders/${order.id}`); c.check(JSON.stringify(r.json) === JSON.stringify(order), 'GET /orders/:id matches the checkout response byte-for-byte'); });
+      await s.step('Cart is locked after checkout', async (c) => {
+        let r = await api('POST', `/carts/${cartId}/items`, { productId: a.id, quantity: 1 }); c.check(r.status === 409 && errOf(r) === 'CART_ALREADY_CHECKED_OUT', 'add item -> 409 CART_ALREADY_CHECKED_OUT');
+        r = await api('POST', `/carts/${cartId}/checkout`, {}); c.check(r.status === 409 && r.json.error.details?.orderId === order.id, `re-checkout -> 409 with details.orderId = ${short(order.id)}… (client can recover)`);
+        r = await api('GET', `/carts/${cartId}`); c.check(r.json.checkedOutAt && r.json.orderId === order.id, 'cart view shows checkedOutAt + orderId');
+      });
+      await s.step('Unknown order id', async (c) => { const r = await api('GET', '/orders/nope'); c.check(r.status === 404 && errOf(r) === 'ORDER_NOT_FOUND', '404 ORDER_NOT_FOUND'); });
+    },
+  },
+  {
+    id: 'retry', title: 'Retried checkout is idempotent', tag: 'Checkout & orders',
+    why: 'A client that times out will retry. The retry must not create a second order or charge inventory twice - even when the retries arrive concurrently.',
+    expected: ['5 simultaneous requests with one Idempotency-Key -> five 201s, one order id', 'Inventory charged once', 'Same key, different coupon -> 409 IDEMPOTENCY_KEY_REUSED (not a retry)', 'Same key, different cart -> 409 IDEMPOTENCY_KEY_REUSED', 'A failed attempt does not burn the key; fix the cart and retry'],
+    async run(s) {
+      const key = 'retry-' + crypto.randomUUID().slice(0, 8);
+      let cartId, p, orderId;
+      await s.step('Fire 5 identical checkouts at once (same Idempotency-Key)', async (c) => {
+        p = await richest(); cartId = await cartWith([[p.id, 1]]);
+        const rs = await Promise.all(Array.from({ length: 5 }, () => api('POST', `/carts/${cartId}/checkout`, {}, { 'Idempotency-Key': key })));
+        const ids = new Set(rs.map((r) => r.json.id));
+        c.check(rs.every((r) => r.status === 201), 'all 5 responses are 201');
+        c.check(ids.size === 1, `all 5 responses carry the same order id (${short([...ids][0])}…)`);
+        orderId = [...ids][0];
+      });
+      await s.step('Inventory was charged exactly once', async (c) => { c.check(await inv(p.id) === p.inventory - 1, `${p.id}: ${p.inventory} -> ${p.inventory - 1}`); });
+      await s.step('Replay later (sequential) still returns the same order', async (c) => { const r = await api('POST', `/carts/${cartId}/checkout`, {}, { 'Idempotency-Key': key }); c.check(r.status === 201 && r.json.id === orderId, '201, same id'); });
+      await s.step('Same key with a different payload is rejected', async (c) => {
+        let r = await api('POST', `/carts/${cartId}/checkout`, { couponCode: 'SOMETHING' }, { 'Idempotency-Key': key }); c.check(r.status === 409 && errOf(r) === 'IDEMPOTENCY_KEY_REUSED', 'different coupon -> 409 IDEMPOTENCY_KEY_REUSED');
+        const other = await cartWith([[p.id, 1]]);
+        r = await api('POST', `/carts/${other}/checkout`, {}, { 'Idempotency-Key': key }); c.check(r.status === 409 && errOf(r) === 'IDEMPOTENCY_KEY_REUSED', 'different cart -> 409 IDEMPOTENCY_KEY_REUSED');
+      });
+      await s.step('A failed checkout does not consume its key', async (c) => {
+        const k2 = 'retry-' + crypto.randomUUID().slice(0, 8);
+        const id = await cartWith([[p.id, 9999]]);
+        let r = await api('POST', `/carts/${id}/checkout`, {}, { 'Idempotency-Key': k2 }); c.check(r.status === 409 && errOf(r) === 'INSUFFICIENT_INVENTORY', 'first attempt fails: 409 INSUFFICIENT_INVENTORY');
+        await api('PATCH', `/carts/${id}/items/${p.id}`, { quantity: 1 });
+        r = await api('POST', `/carts/${id}/checkout`, {}, { 'Idempotency-Key': k2 }); c.check(r.status === 201, 'after fixing the cart, the same key succeeds: 201');
+      });
+    },
+  },
+  {
+    id: 'oversell', title: 'Concurrent checkouts never oversell', tag: 'Inventory',
+    why: 'Many customers hit "Buy" at the same moment for the last few units. Exactly as many orders as units must succeed; the rest must get a clear 409.',
+    note: 'This scenario drains the chosen product to 0. Restart the server to reseed.',
+    expected: ['N+6 carts race for N units -> exactly N x 201, 6 x 409 INSUFFICIENT_INVENTORY', 'Inventory ends at 0, never negative', 'A single over-ask returns requested vs available in error details', 'Report quantity for the product equals units actually sold'],
+    async run(s) {
+      let p, before, soldBefore;
+      await s.step('Pick the product with the least stock (> 0)', async (c) => {
+        const ps = (await products()).filter((x) => x.inventory > 0).sort((a, b) => a.inventory - b.inventory);
+        p = ps[0]; before = p.inventory; soldBefore = (await report()).purchasedQuantityByProduct[p.id] ?? 0;
+        c.check(!!p, `${p?.name} (${p?.id}) with ${before} unit(s) left`);
+      });
+      await s.step('Single cart asks for more than exists', async (c) => {
+        const id = await cartWith([[p.id, before + 1]]);
+        const r = await api('POST', `/carts/${id}/checkout`, {});
+        c.check(r.status === 409 && errOf(r) === 'INSUFFICIENT_INVENTORY', '409 INSUFFICIENT_INVENTORY');
+        c.check(r.json.error.details?.requested === before + 1 && r.json.error.details?.available === before, `details: requested ${before + 1}, available ${before}`);
+        c.check(await inv(p.id) === before, 'nothing was reserved by the failed attempt');
+      });
+      await s.step(`${before + 6} carts race for ${before} unit(s), 1 each, all at once`, async (c) => {
+        const ids = await Promise.all(Array.from({ length: before + 6 }, () => cartWith([[p.id, 1]])));
+        const rs = await Promise.all(ids.map((id) => api('POST', `/carts/${id}/checkout`, {})));
+        const won = rs.filter((r) => r.status === 201).length;
+        const lost = rs.filter((r) => r.status === 409 && errOf(r) === 'INSUFFICIENT_INVENTORY').length;
+        c.check(won === before, `exactly ${before} succeeded (got ${won})`);
+        c.check(lost === 6, `6 refused with INSUFFICIENT_INVENTORY (got ${lost})`);
+      });
+      await s.step('Inventory is 0 and the report agrees', async (c) => {
+        c.check(await inv(p.id) === 0, 'inventory is 0 (not negative)');
+        const sold = (await report()).purchasedQuantityByProduct[p.id] ?? 0;
+        c.check(sold === soldBefore + before, `report shows ${before} more unit(s) sold (${soldBefore} -> ${sold})`);
+      });
+    },
+  },
+  {
+    id: 'milestone', title: 'Coupon milestones & admin generation', tag: 'Coupons',
+    why: `Every ${config.n}th order unlocks one ${config.x}% coupon. The admin may ask at any time; a coupon must appear only for a reached, unrewarded milestone, and never twice for the same one.`,
+    expected: ['Before the milestone: 409 MILESTONE_NOT_REACHED with ordersPlaced / nextMilestone', 'At the milestone: 201 with code, percent, milestone', 'Repeated request: same coupon (idempotent), not a new one', '5 concurrent requests: one distinct coupon', 'Report couponsGenerated increases by exactly 1'],
+    async run(s) {
+      let rep, needed;
+      await s.step('Where are we relative to the next milestone?', async (c) => {
+        rep = await report();
+        needed = config.n - (rep.totalOrders % config.n) || config.n;
+        c.check(true, `${rep.totalOrders} orders placed; ${needed} more needed for milestone ${rep.totalOrders + needed}; ${rep.couponsGenerated} coupon(s) generated so far`);
+      });
+      await s.step('Ask too early (if no older milestone is pending)', async (c) => {
+        const r = await api('POST', '/admin/coupons');
+        if (r.status === 409) c.check(errOf(r) === 'MILESTONE_NOT_REACHED' && r.json.error.details?.nextMilestone === config.n, `409 MILESTONE_NOT_REACHED (ordersPlaced ${r.json.error.details?.ordersPlaced}, nextMilestone ${r.json.error.details?.nextMilestone})`);
+        else { rememberCoupon(r.json); c.note(`an earlier milestone (${r.json.milestone}) was still unrewarded or already generated, so the admin got ${r.json.code} instead of 409 - that is correct oldest-first behaviour`); c.check(r.status === 201, '201 (existing/older milestone served first)'); }
+      });
+      await s.step(`Place ${needed} order(s) to reach the milestone`, async (c) => {
+        const filler = (await richest()).id;
+        for (let i = 0; i < needed; i++) await api('POST', `/carts/${await cartWith([[filler, 1]])}/checkout`, {});
+        const r = await report(); c.check(r.totalOrders % config.n === 0, `now ${r.totalOrders} orders - a multiple of ${config.n}`);
+      });
+      await s.step('Generate: a coupon for the (oldest) unrewarded milestone', async (c) => {
+        // Drain any older unrewarded milestones first so the last call is the fresh one.
+        const g0 = (await report()).couponsGenerated;
+        let r, seen = 0;
+        for (let i = 0; i < 25; i++) { r = await api('POST', '/admin/coupons'); if (!r.ok || coupons.has(r.json.code)) break; rememberCoupon(r.json); seen++; }
+        const g = (await report()).couponsGenerated;
+        c.check(seen >= 1, `${seen} new coupon(s) generated, the newest for milestone ${[...coupons.values()].at(-1)?.milestone}`);
+        c.check(g === g0 + seen, `report couponsGenerated: ${g0} -> ${g} (exactly one per newly rewarded milestone)`);
+        c.check([...coupons.values()].at(-1)?.percent === config.x, `percent = ${config.x}`);
+      });
+      await s.step('Generate again: idempotent, no second coupon', async (c) => {
+        const g0 = (await report()).couponsGenerated;
+        const r = await api('POST', '/admin/coupons');
+        c.check(r.status === 201 && coupons.has(r.json.code), `returned an already-known coupon (${r.json.code})`);
+        c.check((await report()).couponsGenerated === g0, 'couponsGenerated unchanged');
+      });
+      await s.step('5 admins click Generate at the same time', async (c) => {
+        const g0 = (await report()).couponsGenerated;
+        const rs = await Promise.all(Array.from({ length: 5 }, () => api('POST', '/admin/coupons')));
+        const codes = new Set(rs.map((r) => r.json.code));
+        c.check(rs.every((r) => r.status === 201) && codes.size === 1, `all 201, one distinct code (${[...codes][0]})`);
+        c.check((await report()).couponsGenerated === g0, 'still no extra coupon');
+      });
+    },
+  },
+  {
+    id: 'redeem', title: 'A coupon is redeemed exactly once', tag: 'Coupons',
+    why: 'A coupon applied to a checkout that fails must remain usable; once a checkout succeeds with it, nobody can use it again. Discount math must be exact integer cents.',
+    expected: ['Unknown coupon: 404 COUPON_NOT_FOUND', 'Failed checkout with the coupon: coupon still available', `Successful checkout: discount = floor(subtotal x ${config.x} / 100), total = subtotal - discount`, 'Second use: 409 COUPON_ALREADY_REDEEMED', 'Report: available -1, redeemed +1, totalDiscounts += discount'],
+    async run(s) {
+      let code, rep0, order, pid, pid2;
+      await s.step('Obtain an available coupon', async (c) => {
+        code = await ensureCoupon(c); rep0 = await report();
+        const [x, y] = (await products()).sort((m, n) => n.inventory - m.inventory); pid = x.id; pid2 = y.id;
+        c.check(!!code, `using ${code}; report shows ${rep0.couponsAvailable} available / ${rep0.couponsRedeemed} redeemed`);
+      });
+      await s.step('Unknown coupon code', async (c) => { const r = await api('POST', `/carts/${await cartWith([[pid, 1]])}/checkout`, { couponCode: 'NOPE-0000' }); c.check(r.status === 404 && errOf(r) === 'COUPON_NOT_FOUND', '404 COUPON_NOT_FOUND'); });
+      await s.step('Checkout that fails on inventory does NOT consume the coupon', async (c) => {
+        const r = await api('POST', `/carts/${await cartWith([[pid, 9999]])}/checkout`, { couponCode: code });
+        c.check(r.status === 409 && errOf(r) === 'INSUFFICIENT_INVENTORY', '409 INSUFFICIENT_INVENTORY');
+        const rep = await report(); c.check(rep.couponsAvailable === rep0.couponsAvailable && rep.couponsRedeemed === rep0.couponsRedeemed, 'coupon counts unchanged - coupon survived');
+      });
+      await s.step('Successful checkout with the coupon', async (c) => {
+        const r = await api('POST', `/carts/${await cartWith([[pid2, 1], [pid, 1]])}/checkout`, { couponCode: code }); order = r.json;
+        c.check(r.status === 201 && order.couponCode === code, `201, order ${short(order.id)}… references ${code}`);
+        const expectDisc = Math.min(Math.floor((order.subtotalCents * config.x) / 100), order.subtotalCents);
+        c.check(order.discountPercent === config.x && order.discountCents === expectDisc, `discount ${order.discountCents} = floor(${order.subtotalCents} x ${config.x} / 100)`);
+        c.check(order.totalCents === order.subtotalCents - order.discountCents && order.totalCents >= 0, `total ${order.totalCents} = ${order.subtotalCents} - ${order.discountCents} (never negative)`);
+        markRedeemed(code, order.id);
+      });
+      await s.step('Second use of the same coupon is refused', async (c) => { const r = await api('POST', `/carts/${await cartWith([[pid, 1]])}/checkout`, { couponCode: code }); c.check(r.status === 409 && errOf(r) === 'COUPON_ALREADY_REDEEMED', '409 COUPON_ALREADY_REDEEMED'); });
+      await s.step('Report reflects the redemption', async (c) => {
+        const rep = await report();
+        c.check(rep.couponsAvailable === rep0.couponsAvailable - 1 && rep.couponsRedeemed === rep0.couponsRedeemed + 1, `available ${rep0.couponsAvailable} -> ${rep.couponsAvailable}, redeemed ${rep0.couponsRedeemed} -> ${rep.couponsRedeemed}`);
+        c.check(rep.totalDiscountCents === rep0.totalDiscountCents + order.discountCents, `totalDiscounts += ${order.discountCents}`);
+      });
+    },
+  },
+  {
+    id: 'race-coupon', title: 'Concurrent redeemers of one coupon', tag: 'Coupons',
+    why: 'Two checkouts racing for the same coupon must not both get the discount. Losers keep their carts and can still check out at full price.',
+    expected: ['8 carts, same coupon, simultaneously -> 1 x 201, 7 x 409 COUPON_ALREADY_REDEEMED', 'Only the winning order references the coupon', 'A loser can check out again without the coupon at full price'],
+    async run(s) {
+      let code, rs, ids, pid;
+      await s.step('Obtain an available coupon', async (c) => { code = await ensureCoupon(c); pid = (await richest()).id; c.check(!!code, `using ${code}`); });
+      await s.step('8 carts race to redeem it', async (c) => {
+        ids = await Promise.all(Array.from({ length: 8 }, () => cartWith([[pid, 2]])));
+        rs = await Promise.all(ids.map((id) => api('POST', `/carts/${id}/checkout`, { couponCode: code })));
+        const won = rs.filter((r) => r.status === 201), lost = rs.filter((r) => r.status === 409 && errOf(r) === 'COUPON_ALREADY_REDEEMED');
+        c.check(won.length === 1, `exactly one 201 (got ${won.length})`);
+        c.check(lost.length === 7, `seven 409 COUPON_ALREADY_REDEEMED (got ${lost.length})`);
+        if (won[0]) { c.check(won[0].json.couponCode === code && won[0].json.discountCents > 0, `winner ${short(won[0].json.id)}… got ${money(won[0].json.discountCents)} off`); markRedeemed(code, won[0].json.id); }
+      });
+      await s.step('A loser retries without the coupon and pays full price', async (c) => {
+        const loserIdx = rs.findIndex((r) => r.status !== 201);
+        const r = await api('POST', `/carts/${ids[loserIdx]}/checkout`, {});
+        c.check(r.status === 201 && r.json.discountCents === 0 && r.json.couponCode === undefined, `201, discount 0, total ${money(r.json.totalCents)}`);
+      });
+    },
+  },
+  {
+    id: 'report', title: 'Report reconciles and is read-only', tag: 'Administration',
+    why: 'The admin summary must agree with the orders and coupons the system returns, and asking for it must never change anything.',
+    expected: ['Two consecutive reports are identical', 'net = gross - discounts; generated = available + redeemed', 'Placing one known order moves every figure by exactly the expected delta'],
+    async run(s) {
+      let r1;
+      await s.step('Fetch the report twice', async (c) => { r1 = await report(); const r2 = await report(); c.check(JSON.stringify(r1) === JSON.stringify(r2), 'identical payloads - no mutation'); });
+      await s.step('Internal arithmetic holds', async (c) => {
+        c.check(r1.netRevenueCents === r1.grossRevenueCents - r1.totalDiscountCents, `net ${r1.netRevenueCents} = gross ${r1.grossRevenueCents} - discounts ${r1.totalDiscountCents}`);
+        c.check(r1.couponsGenerated === r1.couponsAvailable + r1.couponsRedeemed, `generated ${r1.couponsGenerated} = available ${r1.couponsAvailable} + redeemed ${r1.couponsRedeemed}`);
+      });
+      await s.step('Place one known order and diff the report', async (c) => {
+        const p = await richest();
+        const r = await api('POST', `/carts/${await cartWith([[p.id, 1]])}/checkout`, {});
+        const r2 = await report();
+        c.check(r.status === 201, `placed 1 x ${p.name} @ ${p.priceCents}`);
+        c.check(r2.totalOrders === r1.totalOrders + 1, `totalOrders +1 (${r1.totalOrders} -> ${r2.totalOrders})`);
+        c.check(r2.grossRevenueCents === r1.grossRevenueCents + r.json.subtotalCents, `gross +${r.json.subtotalCents}`);
+        c.check(r2.totalDiscountCents === r1.totalDiscountCents, 'discounts unchanged');
+        c.check(r2.netRevenueCents === r1.netRevenueCents + r.json.totalCents, `net +${r.json.totalCents}`);
+        c.check((r2.purchasedQuantityByProduct[p.id] ?? 0) === (r1.purchasedQuantityByProduct[p.id] ?? 0) + 1, `${p.id} quantity +1`);
+        c.check(r2.couponsGenerated === r1.couponsGenerated && r2.couponsRedeemed === r1.couponsRedeemed, 'coupon counts unchanged');
+      });
+    },
+  },
+];
+
+// ============================================================ pages
+function renderNav() {
+  $('navScenarios').innerHTML = SCENARIOS.map((sc, i) =>
+    `<a href="#${sc.id}" data-page="${sc.id}"><span class="n">${i + 1}</span>${esc(sc.title)}<span class="st ${results[sc.id] ?? ''}"></span></a>`).join('');
+  const page = location.hash.slice(1) || 'store';
+  document.querySelectorAll('nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
+}
+
+function renderScenario(sc) {
+  const i = SCENARIOS.indexOf(sc) + 1;
+  $('main').innerHTML = `
+    <div class="page">
+      <div class="page-head">
+        <div><div class="tag">Use case ${i} &middot; ${esc(sc.tag)}</div><h2>${esc(sc.title)}</h2><p class="muted" style="margin:0">${esc(sc.why)}</p></div>
+      </div>
+      ${sc.note ? `<div class="note">${esc(sc.note)}</div>` : ''}
+      <div class="two">
+        <div class="card"><h4>Expected behaviour</h4><ul class="expect">${sc.expected.map((e) => `<li>${esc(e)}</li>`).join('')}</ul></div>
+        <div class="card"><h4>How it is exercised</h4><p class="muted" style="margin:0 0 10px">The browser issues real HTTP requests to this server - several of them concurrently where the use case calls for it. Each step lists the requests it made, the status codes, and the checks it asserted. Click a step to expand it.</p>
+          <div class="runbar"><button class="primary" id="run">Run use case ${i}</button><span class="summary"></span></div></div>
+      </div>
+      <div class="card"><h4>Steps</h4><div class="steps"><div class="muted">Not run yet.</div></div></div>
+    </div>`;
+  $('run').addEventListener('click', () => runScenario(sc));
+}
+
+async function runScenario(sc) {
+  if (location.hash.slice(1) !== sc.id) { location.hash = sc.id; await new Promise((r) => setTimeout(r, 0)); }
+  const container = $('main');
+  const btn = container.querySelector('#run'); btn.disabled = true;
+  container.querySelector('.steps').innerHTML = '';
+  container.querySelector('.summary').innerHTML = '';
+  results[sc.id] = 'running'; renderNav();
+  const runner = makeRunner(container);
+  try { await sc.run(runner); } catch (e) { console.error(e); }
+  results[sc.id] = runner.failed ? 'fail' : 'pass'; renderNav();
+  btn.disabled = false;
+  await refreshState();
+  toast(`${sc.title}: ${runner.failed ? runner.failed + ' step(s) failed' : 'all steps passed'}`, runner.failed ? 'bad' : 'ok');
+}
+
+// ---------------------------------------------------------------- storefront
+const store = { cart: null, key: null, order: null };
+function renderStore() {
+  $('main').innerHTML = `
+    <div class="page">
+      <div class="page-head"><div><div class="tag">Play</div><h2>Storefront</h2><p class="muted" style="margin:0">Drive the API by hand. Everything here uses the same endpoints as the use cases; the request log at the bottom shows each call.</p></div></div>
+      <div class="store">
+        <div>
+          <div class="card"><h4>Products</h4><table class="grid"><thead><tr><th>Product</th><th class="num">Price</th><th class="num">Stock</th><th></th></tr></thead><tbody id="sfProducts"></tbody></table>
+            <p class="muted" style="margin:10px 0 0;font-size:12px">Adding more than stock is allowed; checkout is the only place stock is authoritative.</p></div>
+          <div class="card" id="sfOrderCard"><h4>Last order</h4><div id="sfOrder" class="muted">No order yet.</div>
+            <div class="row" style="margin-top:10px"><input type="text" id="sfLookup" placeholder="order id" style="flex:1"/><button id="sfFetch">Fetch order</button></div></div>
+        </div>
+        <div>
+          <div class="card"><h4>Cart <span id="sfCartState" style="margin-left:6px"></span></h4>
+            <div class="row"><button id="sfNew">New cart</button><code id="sfCartId">-</code></div>
+            <table class="grid"><thead><tr><th>Item</th><th class="num">Unit</th><th>Qty</th><th class="num">Line</th><th></th></tr></thead><tbody id="sfItems"></tbody></table>
+            <div class="row" style="justify-content:space-between;margin-top:10px"><span class="muted">Subtotal</span><span class="total" id="sfSubtotal">-</span></div>
+            <div class="row"><input type="text" id="sfCoupon" placeholder="coupon code (optional)" style="flex:1"/><span id="sfCouponPick"></span></div>
+            <div class="row"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="sfUseKey" checked/> send <code>Idempotency-Key</code></label><code id="sfKey"></code></div>
+            <div class="row"><button class="primary" id="sfCheckout">Checkout</button><button id="sfCheckout2" title="Two identical requests in parallel">Checkout x2 (simulate retry)</button></div>
+          </div>
+          <div class="card"><h4>Admin</h4>
+            <div class="row"><button id="sfGen">Generate coupon</button><button id="sfFill">Place orders to next milestone</button></div>
+            <div id="sfCoupons" class="muted" style="font-size:13px">No coupons seen yet in this session.</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  $('sfNew').addEventListener('click', newStoreCart);
+  $('sfProducts').addEventListener('click', async (e) => {
+    const id = e.target?.dataset?.add; if (!id) return;
+    if (!store.cart || store.cart.checkedOutAt) await newStoreCart();
+    const qty = Number(document.querySelector(`[data-qty="${id}"]`).value);
+    const r = await api('POST', `/carts/${store.cart.id}/items`, { productId: id, quantity: qty });
+    if (r.ok) { store.cart = r.json; renderCart(); } else toast(`${errOf(r)}: ${r.json.error?.message}`, 'bad');
+  });
+  $('sfItems').addEventListener('change', async (e) => {
+    const id = e.target?.dataset?.upd; if (!id) return;
+    const r = await api('PATCH', `/carts/${store.cart.id}/items/${id}`, { quantity: Number(e.target.value) });
+    if (r.ok) { store.cart = r.json; renderCart(); } else { toast(`${errOf(r)}: ${r.json.error?.message}`, 'bad'); await refreshCart(); }
+  });
+  $('sfItems').addEventListener('click', async (e) => {
+    const id = e.target?.dataset?.rm; if (!id) return;
+    const r = await api('DELETE', `/carts/${store.cart.id}/items/${id}`);
+    if (r.ok) { store.cart = r.json; renderCart(); } else toast(errOf(r), 'bad');
+  });
+  $('sfCheckout').addEventListener('click', async () => finishCheckout([await checkoutReq()]));
+  $('sfCheckout2').addEventListener('click', async () => {
+    const rs = await Promise.all([checkoutReq(), checkoutReq()]);
+    const ids = rs.filter((r) => r.ok).map((r) => r.json.id);
+    if (ids.length === 2) toast(ids[0] === ids[1] ? 'Both requests returned the SAME order (idempotent)' : 'BUG: two different orders', ids[0] === ids[1] ? 'ok' : 'bad');
+    else if (ids.length === 1) toast(`One 201 and one ${rs.find((r) => !r.ok).status} ${errOf(rs.find((r) => !r.ok))} - exactly one order`, 'ok');
+    await finishCheckout(rs);
+  });
+  $('sfFetch').addEventListener('click', async () => { const id = $('sfLookup').value.trim(); if (!id) return; const r = await api('GET', `/orders/${id}`); if (r.ok) renderOrder(r.json); else toast(`${errOf(r)}: ${r.json.error?.message}`, 'bad'); });
+  $('sfGen').addEventListener('click', async () => { const r = await api('POST', '/admin/coupons'); if (r.ok) { rememberCoupon(r.json); toast(`Coupon ${r.json.code} (milestone ${r.json.milestone})`, 'ok'); } else toast(`${errOf(r)}: ${r.json.error?.message}`, 'bad'); await refreshState(); renderStoreCoupons(); });
+  $('sfFill').addEventListener('click', async (e) => { e.target.disabled = true; const rep = await report(); const need = config.n - (rep.totalOrders % config.n) || config.n; const filler = (await richest()).id; for (let i = 0; i < need; i++) await api('POST', `/carts/${await cartWith([[filler, 1]])}/checkout`, {}); toast(`Placed ${need} order(s); milestone ${rep.totalOrders + need} reached.`, 'ok'); e.target.disabled = false; await refreshState(); });
+  $('sfCoupons').addEventListener('click', (e) => { const code = e.target?.dataset?.use; if (code) { $('sfCoupon').value = code; toast(`Coupon ${code} set on the cart`); } });
+  renderStoreProducts(); renderCart(); renderOrder(store.order); renderStoreCoupons();
+}
+async function renderStoreProducts() {
+  const ps = await products();
+  $('sfProducts').innerHTML = ps.map((p) => `<tr><td>${esc(p.name)}<br><code>${p.id}</code></td><td class="num">${money(p.priceCents)}</td><td class="num ${p.inventory === 0 ? 'stock-out' : p.inventory <= 5 ? 'stock-low' : ''}">${p.inventory}</td><td style="text-align:right;white-space:nowrap"><input type="number" min="1" value="1" data-qty="${p.id}"/> <button data-add="${p.id}">Add</button></td></tr>`).join('');
+}
+async function newStoreCart() { const r = await api('POST', '/carts'); store.cart = { ...r.json, subtotalCents: 0 }; store.key = 'ui-' + crypto.randomUUID().slice(0, 8); renderCart(); }
+async function refreshCart() { if (!store.cart) return; const r = await api('GET', `/carts/${store.cart.id}`); if (r.ok) { store.cart = r.json; renderCart(); } }
+function renderCart() {
+  const c = store.cart; if (!$('sfItems')) return;
+  const locked = !!c?.checkedOutAt;
+  $('sfCartId').textContent = c ? c.id : '-'; $('sfKey').textContent = store.key ?? '';
+  $('sfCartState').innerHTML = !c ? '' : locked ? `<span class="pill warn">checked out &rarr; order ${short(c.orderId)}&hellip;</span>` : '<span class="pill ok">open</span>';
+  $('sfItems').innerHTML = !c || c.items.length === 0 ? `<tr><td colspan="5" class="muted">${c ? 'Empty - add products on the left.' : 'Click "New cart" or add a product.'}</td></tr>` :
+    c.items.map((it) => `<tr><td>${esc(it.name)}</td><td class="num">${money(it.unitPriceCents)}</td><td><input type="number" min="1" value="${it.quantity}" data-upd="${it.productId}" ${locked ? 'disabled' : ''}/></td><td class="num">${money(it.lineTotalCents)}</td><td><button data-rm="${it.productId}" ${locked ? 'disabled' : ''} style="color:var(--bad)">&times;</button></td></tr>`).join('');
+  $('sfSubtotal').textContent = c ? money(c.subtotalCents) : '-';
+  $('sfCheckout').disabled = $('sfCheckout2').disabled = !c || locked;
+}
+function checkoutReq() {
+  const body = {}; const code = $('sfCoupon').value.trim(); if (code) body.couponCode = code;
+  const headers = $('sfUseKey').checked && store.key ? { 'Idempotency-Key': store.key } : {};
+  return api('POST', `/carts/${store.cart.id}/checkout`, body, headers);
+}
+async function finishCheckout(rs) {
+  const ok = rs.find((r) => r.ok), bad = rs.find((r) => !r.ok);
+  if (ok) { store.order = ok.json; renderOrder(store.order); if (store.order.couponCode) markRedeemed(store.order.couponCode, store.order.id); toast(`Order ${short(store.order.id)}… placed: ${money(store.order.totalCents)}`, 'ok'); }
+  if (bad && !ok) toast(`${errOf(bad)}: ${bad.json.error?.message}`, 'bad');
+  await Promise.all([refreshCart(), renderStoreProducts(), refreshState()]); renderStoreCoupons();
+}
+function renderOrder(o) {
+  if (!$('sfOrder')) return;
+  if (!o) { $('sfOrder').innerHTML = '<span class="muted">No order yet.</span>'; return; }
+  $('sfOrder').innerHTML = `<div class="muted" style="font-size:12px">order <code>${o.id}</code><br>cart <code>${o.cartId}</code><br>${new Date(o.createdAt).toLocaleString()}</div>
+    <table class="grid receipt" style="margin-top:8px"><tbody>
+      ${o.lines.map((l) => `<tr><td>${esc(l.name)} <span class="muted">&times;${l.quantity} @ ${money(l.unitPriceCents)}</span></td><td class="num">${money(l.lineTotalCents)}</td></tr>`).join('')}
+      <tr><td class="muted">Subtotal</td><td class="num">${money(o.subtotalCents)}</td></tr>
+      <tr><td class="muted">Discount ${o.couponCode ? `<code>${o.couponCode}</code> ${o.discountPercent}%` : '(none)'}</td><td class="num">-${money(o.discountCents)}</td></tr>
+      <tr class="tt"><td>Total</td><td class="num">${money(o.totalCents)}</td></tr></tbody></table>`;
+  $('sfLookup').value = o.id;
+}
+function renderStoreCoupons() {
+  if (!$('sfCoupons')) return;
+  $('sfCoupons').innerHTML = coupons.size === 0 ? 'No coupons seen yet in this session. Reach a milestone, then generate.' :
+    [...coupons.values()].map((c) => `<div class="row" style="margin:4px 0"><code>${c.code}</code><span class="pill ${c.status === 'available' ? 'ok' : 'neutral'}">${c.status}</span><span class="muted">${c.percent}% &middot; milestone ${c.milestone}</span>${c.status === 'available' ? `<button class="ghost" data-use="${c.code}" style="padding:2px 8px">use in cart</button>` : ''}</div>`).join('');
+}
+
+// ============================================================ routing & boot
+function route() {
+  const page = location.hash.slice(1) || 'store';
+  renderNav();
+  const sc = SCENARIOS.find((s) => s.id === page);
+  if (sc) renderScenario(sc); else renderStore();
+}
+window.addEventListener('hashchange', route);
+$('drawerToggle').addEventListener('click', (e) => { if (e.target.id !== 'clearLog') $('drawer').classList.toggle('open'); });
+$('clearLog').addEventListener('click', () => { $('logBody').innerHTML = ''; reqCount = 0; $('logCount').textContent = '0 requests'; });
+$('runAll').addEventListener('click', async () => {
+  $('runAll').disabled = true;
+  for (const sc of SCENARIOS) await runScenario(sc);
+  $('runAll').disabled = false;
+  const failed = SCENARIOS.filter((s) => results[s.id] === 'fail').length;
+  toast(failed ? `${failed} use case(s) failed` : `All ${SCENARIOS.length} use cases passed`, failed ? 'bad' : 'ok');
+});
+
+(async () => {
+  try {
+    const h = await api('GET', '/health'); config = h.json.config;
+    $('cfg').textContent = `every ${config.n} orders \u2192 one ${config.x}% coupon`;
+    // Re-render scenario copy that depends on config.
+    SCENARIOS.find((s) => s.id === 'milestone').why = `Every ${config.n}th order unlocks one ${config.x}% coupon. The admin may ask at any time; a coupon must appear only for a reached, unrewarded milestone, and never twice for the same one.`;
+    SCENARIOS.find((s) => s.id === 'redeem').expected[2] = `Successful checkout: discount = floor(subtotal x ${config.x} / 100), total = subtotal - discount`;
+  } catch { $('cfg').textContent = 'server unreachable'; }
+  await refreshState();
+  route();
+})();
+})();
+</script>
+</body>
+</html>
